@@ -1,0 +1,26 @@
+districts:
+  - {id: BD,  name: "Ba Đình",     ubnd_query: "Ủy ban nhân dân quận Ba Đình, Hà Nội"}
+  - {id: HK,  name: "Hoàn Kiếm",   ubnd_query: "Ủy ban nhân dân quận Hoàn Kiếm, Hà Nội"}
+  - {id: TH,  name: "Tây Hồ",      ubnd_query: "Ủy ban nhân dân quận Tây Hồ, Hà Nội"}
+  - {id: LB,  name: "Long Biên",   ubnd_query: "Ủy ban nhân dân quận Long Biên, Hà Nội"}
+  - {id: CG,  name: "Cầu Giấy",    ubnd_query: "Ủy ban nhân dân quận Cầu Giấy, Hà Nội"}
+  - {id: DD,  name: "Đống Đa",     ubnd_query: "Ủy ban nhân dân quận Đống Đa, Hà Nội"}
+  - {id: HBT, name: "Hai Bà Trưng", ubnd_query: "Ủy ban nhân dân quận Hai Bà Trưng, Hà Nội"}
+  - {id: HM,  name: "Hoàng Mai",   ubnd_query: "Ủy ban nhân dân quận Hoàng Mai, Hà Nội"}
+  - {id: TX,  name: "Thanh Xuân",  ubnd_query: "Ủy ban nhân dân quận Thanh Xuân, Hà Nội"}
+  - {id: HD,  name: "Hà Đông",     ubnd_query: "Ủy ban nhân dân quận Hà Đông, Hà Nội"}
+  - {id: NTL, name: "Nam Từ Liêm", ubnd_query: "Ủy ban nhân dân quận Nam Từ Liêm, Hà Nội"}
+  - {id: BTL, name: "Bắc Từ Liêm", ubnd_query: "Ủy ban nhân dân quận Bắc Từ Liêm, Hà Nội"}
+
+# polygon: luôn dùng representative_point() của polygon quận (tái lập được).
+# ubnd: geocode ubnd_query, không ra hoặc rơi ngoài quận thì mới dùng polygon. Cần Nominatim;
+#       từ 01/07/2025 không còn UBND quận nên phần lớn truy vấn trên có thể không còn khớp.
+representative_source: polygon
+
+edge_rules:
+  min_shared_boundary_m: 50
+  min_inside_ratio: 0.90
+overrides:
+  # NTL–BTL: inside_ratio = 0,896, sát ngưỡng 0,90; không có cạnh này thì Bắc Từ Liêm bị cô lập.
+  force_edges: [[NTL, BTL]]
+  forbid_edges: []

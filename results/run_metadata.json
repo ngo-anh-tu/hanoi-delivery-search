@@ -1,0 +1,77 @@
+{
+  "download_B1": {
+    "downloaded_at_utc": "2026-10-31T19:32:58+00:00",
+    "file": "B1_20261031.graphml",
+    "osmnx_version": "2.1.1",
+    "networkx_version": "3.7",
+    "bbox_west_south_east_north": [
+      105.67695013530711,
+      20.88377297297297,
+      105.9669498646929,
+      21.13212702702703
+    ],
+    "network_type": "drive",
+    "custom_filter": null,
+    "n_nodes": 56459,
+    "n_edges": 139362
+  },
+  "download_B2": {
+    "downloaded_at_utc": "2026-10-31T19:35:34+00:00",
+    "file": "B2_20261031.graphml",
+    "osmnx_version": "2.1.1",
+    "networkx_version": "3.7",
+    "bbox_west_south_east_north": [
+      105.67695013530711,
+      20.88377297297297,
+      105.9669498646929,
+      21.13212702702703
+    ],
+    "network_type": null,
+    "custom_filter": "[\"highway\"~\"motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link\"][\"area\"!~\"yes\"][\"access\"!~\"private\"][\"motor_vehicle\"!~\"no\"][\"motorcar\"!~\"no\"]",
+    "n_nodes": 4132,
+    "n_edges": 7437
+  },
+  "preprocess_B1": {
+    "raw_file": "B1_20261031.graphml",
+    "crs": "EPSG:32648",
+    "node_keep_ratio": 0.998
+  },
+  "preprocess_B2": {
+    "raw_file": "B2_20261031.graphml",
+    "crs": "EPSG:32648",
+    "node_keep_ratio": 0.9414
+  },
+  "district_graph": {
+    "n_nodes": 12,
+    "n_edges": 15,
+    "point_sources": {
+      "polygon": 12
+    }
+  },
+  "select_cases": {
+    "random_seed": 42,
+    "n_random_sampled": 50,
+    "n_cases_by_dataset": {
+      "B1": 56,
+      "B2": 31
+    }
+  },
+  "benchmark_B1": {
+    "heuristic": "haversine",
+    "n_runs": 224,
+    "seed": 42
+  },
+  "benchmark_B2": {
+    "heuristic": "haversine",
+    "n_runs": 124,
+    "seed": 42
+  },
+  "benchmark_A": {
+    "heuristic": "matrix_euclid_utm_round_down",
+    "n_runs": 528
+  },
+  "multi_stop": {
+    "scenario": "M1",
+    "n_rows": 4
+  }
+}

@@ -1,0 +1,32 @@
+seed: 42
+datasets: [B1, B2]
+algorithms: [BFS, GBFS, ASTAR, UCS]
+heuristic: haversine               # haversine | euclid_utm (euclid_utm không consistent, xem docs/design.md mục 2.2)
+
+search:
+  tie_break: fifo                  # (priority, counter)
+  neighbor_order: node_id_asc
+  goal_test: on_pop
+
+timing:
+  warmup: 1
+  repeats: 5                       # báo cáo trung vị
+
+traces:
+  save_for: named_cases            # named_cases | all | none
+
+checks:
+  easy_detour_max: 1.20
+  good_detour_max: 1.20
+  good_min_euclid_m: 6000
+  trap_detour_min: 1.40
+  trap_auto_min_euclid_m: 3000
+  trap_auto_top_k: 20
+  bfs_gap_min_ratio: 1.10
+  bearing_tol_deg: 15
+  cost_tol_m: 0.01
+
+level_A:
+  weight_round_up_m: 100
+  heuristic_round_down_m: 100
+  hand_trace_candidates: [[LB, HD], [HM, TH]]

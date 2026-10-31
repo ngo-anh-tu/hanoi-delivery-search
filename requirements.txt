@@ -1,0 +1,14 @@
+osmnx==2.1.1
+networkx==3.7
+geopandas==1.2.0
+shapely==2.2.0
+pyproj==3.8.0
+scipy==1.18.1
+numpy==2.5.4
+pandas==3.1.0
+matplotlib==3.11.2
+folium==0.20.0
+geopy==2.5.0
+pyyaml==6.0.3
+pytest==9.2.0
+jupyter==1.1.1

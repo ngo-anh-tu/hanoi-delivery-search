@@ -1,0 +1,27 @@
+study_area:
+  mode: from_districts            # from_districts | manual
+  # Dùng .gpkg: bản gadm41_VNM_2.json bị đơn giản hóa nên ranh giới hai quận kề nhau không trùng khít.
+  gadm_file: data/external/gadm41_VNM.gpkg
+  gadm_layer: ADM_ADM_2           # lớp cấp 2; bỏ qua nếu file chỉ có một lớp
+  buffer_km: 3                   # đủ để chứa đầu cầu Nhật Tân phía Đông Anh
+  manual_bbox: null               # [west, south, east, north] nếu mode = manual
+
+crs:
+  geographic: "EPSG:4326"
+  projected: "EPSG:32648"         # UTM 48N
+
+osmnx:
+  simplify: true
+  retain_all: false
+  use_cache: true
+
+datasets:
+  B1:
+    label: "Mạng chi tiết – ô tô con / xe van"
+    network_type: drive
+    custom_filter: null
+  B2:
+    label: "Trục chính – xe tải nhẹ / ô tô liên quận"
+    network_type: null
+    custom_filter: '["highway"~"motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link"]["area"!~"yes"]["access"!~"private"]["motor_vehicle"!~"no"]["motorcar"!~"no"]'
+    include_tertiary: false       # bật nếu LSCC giữ < 85% số nút

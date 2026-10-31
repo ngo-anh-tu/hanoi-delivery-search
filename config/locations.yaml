@@ -1,0 +1,43 @@
+geocoding:
+  user_agent: "hanoi-delivery-search-ngoanhtu"     # Nominatim bắt buộc
+  min_delay_seconds: 1.0                           # giới hạn ~1 yêu cầu/giây
+  cache_file: data/interim/geocode_cache.json
+  max_snap_dist_m: 300
+
+# latlon điền tay, lấy từ đối tượng OSM cùng tên (Overpass, Photon): Nominatim không truy cập được khi
+# tạo file này. Đặt latlon: null để geocode tự động. K2 và T_QUANGAN lấy theo UBND phường.
+depots:
+  K1: {query: "Bến xe Nước Ngầm, Hà Nội", latlon: [20.96510, 105.84318]}
+  K2: {query: "Đức Giang, Long Biên, Hà Nội", latlon: [21.06027, 105.89386]}
+
+targets:
+  T_GIAPBAT:  {query: "Bến xe Giáp Bát, Hà Nội", latlon: [20.98060, 105.84215]}
+  T_BADINH:   {query: "Quảng trường Ba Đình, Hà Nội", latlon: [21.03699, 105.83579]}
+  T_QUANGAN:  {query: "Quảng An, Tây Hồ, Hà Nội", latlon: [21.06305, 105.82839]}
+  T_PHUTAYHO: {query: "Phủ Tây Hồ, Hà Nội", latlon: [21.05573, 105.81964]}
+  T_MYDINH:   {query: "Sân vận động Mỹ Đình, Hà Nội", latlon: [21.02050, 105.76393]}
+  T_BACHKHOA: {query: "Đại học Bách khoa Hà Nội", latlon: [21.00553, 105.84359]}
+
+cases:
+  C1:  {depot: K1, target: T_GIAPBAT,  property: easy}
+  C2:  {depot: K1, target: T_BADINH,   property: good_heuristic}
+  C3:  {depot: K2, target: T_QUANGAN,  property: gbfs_trap, fallback: C3b}
+  C3b: {depot: K1, target: T_PHUTAYHO, property: gbfs_trap}
+  C4:  {depot: K1, target: T_MYDINH,   property: bfs_hop_bias}
+  C5a: {depot: K1, target: T_GIAPBAT,  property: distance_scaling}
+  C5b: {depot: K1, target: T_BACHKHOA, property: distance_scaling}
+  C5c: {depot: K1, target: T_BADINH,   property: distance_scaling}
+
+random_targets:
+  depot: K1
+  n: 50
+  seed: 42
+  sample_within: districts_union
+  min_euclid_from_depot_m: 1000
+
+multi_stop:
+  M1:
+    depot: K1
+    customers: [T_GIAPBAT, T_BACHKHOA, T_BADINH, T_MYDINH, T_PHUTAYHO]
+    return_to_depot: true
+    order_rules: [euclid, road]     # so sánh 2 cách chọn "khách gần nhất"

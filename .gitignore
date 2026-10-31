@@ -1,0 +1,13 @@
+data/raw/
+data/processed/
+data/interim/
+data/external/
+results/traces/
+results/maps/
+cache/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
