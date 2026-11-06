@@ -550,6 +550,9 @@ level_A:
   - `download_dataset(name, cfg, force=False) -> Path` — gọi `ox.graph_from_bbox(bbox, network_type=..., custom_filter=..., simplify=True, retain_all=False)`. **OSMnx 2.x dùng thứ tự bbox `(left, bottom, right, top)` = `(west, south, east, north)`.** Không ghi đè file đã có trừ khi `force=True`.
   - Ghi metadata: thời điểm tải, phiên bản osmnx/networkx, bbox, bộ lọc, số nút, số cạnh.
 - **Lưu ý:** B1 có thể mất vài phút. OSMnx tự chia vùng lớn thành nhiều truy vấn Overpass.
+- Nếu Overpass trả lỗi 5xx tạm thời (ví dụ `502 Gateway Timeout`), downloader tự thử lại tối đa
+  `overpass_retries` lần với thời gian chờ tăng gấp đôi, bắt đầu từ `overpass_backoff_seconds`.
+  Lỗi khác vẫn được ném ra ngay để không che khuất lỗi cấu hình hoặc truy vấn.
 - **Xong khi:** hai file graphml nằm trong `data/raw/` và mở lại được bằng `ox.load_graphml`.
 
 #### `src/data/preprocess.py`

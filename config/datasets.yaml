@@ -14,6 +14,8 @@ osmnx:
   simplify: true
   retain_all: false
   use_cache: true
+  overpass_retries: 3       # số lần thử thêm khi Overpass trả lỗi 5xx tạm thời
+  overpass_backoff_seconds: 10
 
 datasets:
   B1:

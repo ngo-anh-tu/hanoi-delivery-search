@@ -2,9 +2,20 @@
 
 import heapq
 import statistics
+import threading
 import time
 
 MAX_STEPS_NODES = 200
+
+_hooks = threading.local()
+
+
+def set_expand_hook(fn):
+    """Đăng ký fn(node), gọi mỗi lần một nút được mở rộng, cho các Tracer tạo sau trong luồng này.
+
+    Dùng để quan sát tiến trình trực tiếp (demo web); truyền None để gỡ.
+    """
+    _hooks.fn = fn
 
 
 def reconstruct_path(parent, source, target):
@@ -55,9 +66,12 @@ class Tracer:
         self.level = level
         self.wants_steps = level == "steps"
         self.expanded_order = [] if level != "none" else None
+        self._hook = getattr(_hooks, "fn", None)
         self.steps = [] if self.wants_steps else None
 
     def expand(self, node):
+        if self._hook is not None:
+            self._hook(node)
         if self.expanded_order is not None:
             self.expanded_order.append(node)
 

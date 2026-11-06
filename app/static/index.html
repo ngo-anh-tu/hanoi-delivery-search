@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>So sánh thuật toán tìm đường</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --ink:#1c2430; --mute:#5f6b7a; --line:#dde2e8;
+          --open:#16a34a; --path:#e11d48; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12161c; --card:#1b212a; --ink:#e6eaf0; --mute:#9aa6b5; --line:#2e3744; }
+  }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.4 system-ui,sans-serif }
+  header { padding:12px 16px; display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center;
+           background:var(--card); border-bottom:1px solid var(--line) }
+  h1 { font-size:16px; margin:0 8px 0 0 }
+  label { display:flex; align-items:center; gap:6px; color:var(--mute) }
+  select, button { font:inherit; padding:5px 9px; border:1px solid var(--line); border-radius:6px;
+                   background:var(--card); color:var(--ink) }
+  button { cursor:pointer } button.primary { background:#2563eb; color:#fff; border-color:#2563eb }
+  button:disabled { opacity:.5; cursor:default }
+  .pick { display:flex; gap:4px }
+  .pick button.on { outline:2px solid #2563eb }
+  main { padding:12px 16px }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px }
+  @media (max-width:800px) { .grid { grid-template-columns:1fr } }
+  .panel { position:relative; background:var(--card); border:1px solid var(--line); border-radius:8px; overflow:hidden }
+  .panel h2 { position:absolute; z-index:1000; top:8px; left:50px; margin:0; font-size:13px; padding:3px 9px;
+              border-radius:5px; background:var(--card); border:1px solid var(--line); pointer-events:none }
+  .map { height:420px }
+  .overlay { position:absolute; inset:0; pointer-events:none; z-index:450 }
+  .bar { display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; margin:12px 0 }
+  .bar input[type=range] { flex:1; min-width:200px }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; color:var(--mute) }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px }
+  table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:8px }
+  th, td { padding:7px 10px; text-align:right; border-bottom:1px solid var(--line) }
+  th:first-child, td:first-child { text-align:left }
+  th { color:var(--mute); font-weight:600 }
+  #msg { color:var(--mute); margin-left:auto }
+  .err { color:var(--path) }
+  .scroll { overflow-x:auto }
+</style>
+</head>
+<body>
+<header>
+  <h1>So sánh BFS · GBFS · A* · UCS</h1>
+  <label>Đồ thị <select id="dataset"></select></label>
+  <label>Kho <select id="depot"></select></label>
+  <label>Đích <select id="target"></select></label>
+  <div class="pick" title="Chọn rồi bấm lên bản đồ">
+    <button id="pickS" class="on">Đặt điểm đi</button><button id="pickT">Đặt điểm đến</button>
+  </div>
+  <button id="go" class="primary">Chạy</button>
+  <span id="msg"></span>
+</header>
+<main>
+  <div class="grid" id="grid"></div>
+  <div class="bar">
+    <label>Tốc độ <select id="rate">
+      <option value="300">300 nút/giây</option><option value="1500" selected>1.500 nút/giây</option>
+      <option value="6000">6.000 nút/giây</option><option value="30000">30.000 nút/giây</option></select></label>
+    <button id="stop">■ Dừng</button>
+    <label><input type="checkbox" id="showOpen" checked> Hiện nút mở</label>
+    <span id="clock" class="legend"></span>
+  </div>
+  <div class="legend">
+    <span><i class="dot" style="background:#2563eb"></i>đã mở rộng (closed)</span>
+    <span><i class="dot" style="background:var(--open)"></i>đang mở (frontier)</span>
+    <span><i class="dot" style="background:var(--path)"></i>đường đi (hiện khi thuật toán tìm ra đích)</span>
+  </div>
+  <div class="scroll" style="margin-top:12px"><table id="stats"></table></div>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const ALGOS = ["BFS", "GBFS", "ASTAR", "UCS"];
+const NAMES = { BFS: "BFS", GBFS: "Greedy Best-First", ASTAR: "A*", UCS: "UCS (Dijkstra)" };
+const COLORS = { BFS: "#2563eb", GBFS: "#d97706", ASTAR: "#0891b2", UCS: "#7c3aed" };
+const $ = id => document.getElementById(id);
+
+let meta, nodes = {}, live = {}, pick = "s", abort = null, dirty = false;
+let src = null, dst = null, syncing = false, timing = null, snapInfo = "";
+const panels = {};
+
+function mkPanel(algo) {
+  const box = document.createElement("div");
+  box.className = "panel";
+  box.innerHTML = `<h2 style="border-left:4px solid ${COLORS[algo]}">${NAMES[algo]}</h2><div class="map"></div>`;
+  $("grid").appendChild(box);
+  const map = L.map(box.querySelector(".map"), { zoomControl: true, preferCanvas: true }).setView([21.03, 105.83], 12);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap", maxZoom: 19 }).addTo(map);
+  const canvas = document.createElement("canvas");
+  canvas.className = "overlay";
+  map.getContainer().appendChild(canvas);
+  const p = { algo, map, canvas, markers: {} };
+  map.on("move resize zoomend", () => { sync(p); draw(p); });
+  map.on("zoomstart", () => canvas.style.visibility = "hidden");
+  map.on("zoomend", () => canvas.style.visibility = "visible");
+  map.on("click", e => setPoint(pick, e.latlng.lat, e.latlng.lng));
+  panels[algo] = p;
+}
+
+function sync(from) {
+  if (syncing) return;
+  syncing = true;
+  for (const q of Object.values(panels)) if (q !== from) q.map.setView(from.map.getCenter(), from.map.getZoom(), { animate: false });
+  syncing = false;
+}
+
+function setPoint(which, lat, lon, flyTo) {
+  if (which === "s") src = { lat, lon }; else dst = { lat, lon };
+  for (const p of Object.values(panels)) {
+    const key = which, color = which === "s" ? "#16a34a" : "#e11d48";
+    if (p.markers[key]) p.markers[key].setLatLng([lat, lon]);
+    else p.markers[key] = L.circleMarker([lat, lon], { radius: 8, color: "#fff", weight: 2, fillColor: color, fillOpacity: 1 }).addTo(p.map);
+  }
+  if (flyTo) fitPoints();
+}
+
+function fitPoints() {
+  if (!src || !dst) return;
+  const b = L.latLngBounds([[src.lat, src.lon], [dst.lat, dst.lon]]).pad(0.4);
+  Object.values(panels)[0].map.fitBounds(b);
+}
+
+function draw(p) {
+  const c = p.canvas, m = p.map, size = m.getSize(), dpr = window.devicePixelRatio || 1;
+  if (c.width !== size.x * dpr) { c.width = size.x * dpr; c.height = size.y * dpr; }
+  const g = c.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, size.x, size.y);
+  const r = live[p.algo], pts = nodes[$("dataset").value];
+  if (!r || !pts) return;
+
+  const z = m.getZoom(), sz = Math.max(2, Math.min(7, z - 9));
+  const origin = m.getPixelOrigin(), pane = m._getMapPanePos();
+  const proj = i => {
+    const pt = m.project([pts.lat[i], pts.lon[i]], z);
+    return [pt.x - origin.x + pane.x, pt.y - origin.y + pane.y];
+  };
+
+  if ($("showOpen").checked) {
+    g.fillStyle = "rgba(22,163,74,.8)";
+    for (const i of r.open) rect(g, proj(i), sz);
+  }
+  g.fillStyle = COLORS[p.algo] + "b0";
+  for (const i of r.expanded) rect(g, proj(i), sz);
+
+  if (r.path.length) {
+    g.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--path");
+    g.lineWidth = 4; g.lineJoin = "round"; g.beginPath();
+    r.path.forEach((i, j) => { const [x, y] = proj(i); j ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke();
+  }
+}
+const rect = (g, [x, y], s) => g.fillRect(x - s / 2, y - s / 2, s, s);
+const drawAll = () => Object.values(panels).forEach(draw);
+
+async function loadNodes(name) {
+  if (!nodes[name]) {
+    const res = await fetch(`/api/graph/${name}`);
+    nodes[name] = await res.json();
+  }
+}
+
+const fresh = () => ({ expanded: [], open: new Set(), path: [], done: false, found: null, cost_m: null,
+  hops: null, generated: null });
+
+function apply(msg) {
+  if (msg.start) {
+    const snap = Math.round(Math.max(msg.snap_m.source, msg.snap_m.target));
+    snapInfo = `Điểm được gióng vào nút đường gần nhất (lệch tối đa ${snap} m)`;
+    $("msg").textContent = snapInfo;
+  } else if (msg.timing) {
+    timing = msg.timing;
+  } else {
+    const r = live[msg.algo];
+    if (msg.expanded) {
+      for (const i of msg.expanded) { r.expanded.push(i); r.open.delete(i); }
+      for (const i of msg.opened) r.open.add(i);
+    }
+    if (msg.done) {
+      r.done = true; r.path = msg.path || []; r.found = msg.found; r.cost_m = msg.cost_m;
+      r.hops = msg.hops; r.generated = msg.generated;
+    }
+  }
+  dirty = true;
+}
+
+async function runAll() {
+  if (!src || !dst) return;
+  if (abort) abort.abort();
+  abort = new AbortController();
+  const name = $("dataset").value;
+  live = Object.fromEntries(ALGOS.map(a => [a, fresh()])); timing = null;
+  $("msg").className = ""; $("msg").textContent = "Đang chạy…"; $("go").disabled = true;
+  dirty = true;
+  try {
+    await loadNodes(name);
+    const res = await fetch("/api/run", { method: "POST", headers: { "Content-Type": "application/json" },
+      signal: abort.signal,
+      body: JSON.stringify({ dataset: name, source: src, target: dst, rate: +$("rate").value }) });
+    if (!res.ok) throw new Error((await res.json()).error);
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split("\n"); buf = lines.pop();
+      lines.forEach(l => l && apply(JSON.parse(l)));
+    }
+  } catch (e) {
+    if (e.name !== "AbortError") { $("msg").className = "err"; $("msg").textContent = e.message; }
+  }
+  $("go").disabled = false;
+}
+
+function table() {
+  const best = live.UCS.done ? live.UCS.cost_m : null;
+  const rows = ALGOS.map(a => {
+    const r = live[a], gap = r.cost_m && best ? (r.cost_m / best - 1) * 100 : null;
+    const state = r.done ? "" : " …";
+    return `<tr><td><i class="dot" style="background:${COLORS[a]}"></i>${NAMES[a]}${state}</td>
+      <td>${r.expanded.length.toLocaleString("vi")}</td><td>${r.open.size.toLocaleString("vi")}</td>
+      <td>${r.cost_m ? (r.cost_m / 1000).toFixed(2) : "—"}</td><td>${r.hops ?? "—"}</td>
+      <td>${gap === null ? "—" : gap < 0.05 ? "tối ưu" : "+" + gap.toFixed(1) + "%"}</td>
+      <td>${timing ? timing[a].toFixed(1) : "—"}</td></tr>`;
+  }).join("");
+  $("stats").innerHTML = `<tr><th>Thuật toán</th><th>Nút đã mở rộng</th><th>Nút đang mở</th>
+    <th>Độ dài (km)</th><th>Số cạnh</th><th>So với tối ưu</th><th>Thời gian thật (ms)</th></tr>${rows}`;
+}
+
+(function loop() {  // chỉ vẽ lại khi có dữ liệu mới, tối đa mỗi khung hình
+  if (dirty) { dirty = false; drawAll(); table(); }
+  requestAnimationFrame(loop);
+})();
+
+$("showOpen").onchange = drawAll;
+$("go").onclick = runAll;
+$("stop").onclick = () => { if (abort) abort.abort(); $("go").disabled = false; };
+$("pickS").onclick = () => { pick = "s"; $("pickS").classList.add("on"); $("pickT").classList.remove("on"); };
+$("pickT").onclick = () => { pick = "t"; $("pickT").classList.add("on"); $("pickS").classList.remove("on"); };
+
+function fill(sel, list) { sel.innerHTML = list.map(x => `<option value="${x.id}">${x.name}</option>`).join(""); }
+function usePlace(list, id, which) {
+  const x = list.find(p => p.id === id);
+  setPoint(which, x.lat, x.lon);
+  fitPoints();
+}
+
+(async () => {
+  ALGOS.forEach(mkPanel);
+  meta = await (await fetch("/api/meta")).json();
+  if (!meta.datasets.length) {
+    $("msg").className = "err";
+    $("msg").textContent = "Chưa có dữ liệu: chạy scripts/01_download.py rồi scripts/02_preprocess.py";
+    return;
+  }
+  $("dataset").innerHTML = meta.datasets.map(d => `<option value="${d.id}">${d.label}</option>`).join("");
+  fill($("depot"), meta.depots); fill($("target"), meta.targets);
+  $("depot").onchange = () => usePlace(meta.depots, $("depot").value, "s");
+  $("target").onchange = () => usePlace(meta.targets, $("target").value, "t");
+  $("target").selectedIndex = 1;
+  usePlace(meta.depots, $("depot").value, "s");
+  usePlace(meta.targets, $("target").value, "t");
+  runAll();
+})();
+</script>
+</body>
+</html>

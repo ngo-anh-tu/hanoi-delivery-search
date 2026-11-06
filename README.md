@@ -54,33 +54,148 @@ Ca C3 (K2 → Quảng An, phải qua sông Hồng) cho thấy rõ cái bẫy c�
 
 **Về heuristic:** cài đặt dùng `haversine` thay vì `euclid_utm`, vì đo trên dữ liệu thật cho thấy `euclid_utm` không consistent trên khoảng 20% số cạnh. Xem [mục 2.2 của đặc tả](docs/design.md#22-vì-sao-euclid-trên-utm-thỏa-cả-hai-điều-kiện).
 
-## Cài đặt
+## Hướng dẫn tái lập từ đầu
 
-Đã chạy với Python 3.14. Phiên bản thư viện được ghim trong `requirements.txt`.
+Các bước dưới đây chạy theo đúng thứ tự. Nên chạy từ thư mục gốc của repository
+(`hanoi-delivery-search/`); các đường dẫn trong cấu hình đều tính tương đối từ
+thư mục này.
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+### 1. Lấy mã nguồn và cài môi trường
+
+Đã kiểm tra với Python 3.14. Các phiên bản thư viện được ghim trong
+`requirements.txt`.
+
+**Windows PowerShell:**
+
+```powershell
+git clone https://github.com/ngo-anh-tu/hanoi-delivery-search.git
+cd hanoi-delivery-search
+py -3.14 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 ```
 
-Tải ranh giới hành chính Việt Nam từ GADM (gadm.org → Download → Vietnam → **Geopackage**), đặt thành `data/external/gadm41_VNM.gpkg`. Không dùng bản JSON cấp 2 vì ranh giới các quận không trùng khít.
-
-## Chạy
+Nếu PowerShell chặn activate script, có thể gọi Python trong môi trường ảo
+trực tiếp bằng `.venv\Scripts\python.exe`. Trên macOS/Linux, thay hai lệnh tạo
+và kích hoạt môi trường bằng:
 
 ```bash
-pytest -q tests/test_toy_graphs.py tests/test_counting.py tests/test_determinism.py
+python3.14 -m venv .venv
+source .venv/bin/activate
+```
 
-python scripts/01_download.py --dataset all          # vài phút; đã có snapshot thì bỏ qua, trừ khi --force
+### 2. Tải file ngoài bắt buộc
+
+Tải ranh giới hành chính Việt Nam **cấp 2** từ
+[GADM](https://gadm.org/download_country.html):
+
+1. Chọn **Vietnam** → **Geopackage** (không chọn JSON cấp 2).
+2. Đặt file tải về tại `data/external/gadm41_VNM.gpkg`.
+3. Kiểm tra cấu hình `config/datasets.yaml` vẫn có:
+   `gadm_file: data/external/gadm41_VNM.gpkg` và
+   `gadm_layer: ADM_ADM_2`.
+
+Có thể tải trực tiếp bằng PowerShell (nếu URL GADM còn giữ cấu trúc hiện tại):
+
+```powershell
+New-Item -ItemType Directory -Force data\external | Out-Null
+Invoke-WebRequest `
+  -Uri https://geodata.ucdavis.edu/gadm/gadm4.1/gpkg/gadm41_VNM.gpkg `
+  -OutFile data\external\gadm41_VNM.gpkg
+```
+
+Không cần tự tải B1/B2: `scripts/01_download.py` sẽ truy vấn OpenStreetMap
+qua Overpass. Vì vậy
+cần Internet; lần tải đầu có thể mất vài phút và phụ thuộc máy chủ Overpass.
+Nếu đã có snapshot `.graphml` do nhóm cung cấp, đặt chúng vào `data/raw/` với
+tên dạng `B1_YYYYMMDD.graphml` và `B2_YYYYMMDD.graphml`; script sẽ dùng lại
+chúng thay vì tải lại.
+
+### 3. Kiểm tra nhanh trước khi tải dữ liệu
+
+```powershell
+python -m pytest -q tests/test_toy_graphs.py tests/test_counting.py tests/test_determinism.py
+```
+
+Các test này không cần dữ liệu bản đồ thật.
+
+### 4. Chạy pipeline dựng dữ liệu và kết quả
+
+Chạy lần lượt, không bỏ qua bước ở giữa:
+
+```powershell
+# 01 — tải OSM, tạo data/raw/B1_<ngày>.graphml và B2_<ngày>.graphml
+python scripts/01_download.py --dataset all
+
+# 02 — làm sạch, lấy LSCC, chiếu UTM 48N
+#      tạo data/processed/B1.graphml, B2.graphml
 python scripts/02_preprocess.py --dataset all
-python scripts/03_build_district_graph.py
-python scripts/04_select_cases.py --dataset all
-python scripts/05_run_benchmark.py --dataset all
-python scripts/06_make_figures.py --only all
-python scripts/07_multi_stop.py --scenario M1
 
-pytest -q                                            # toàn bộ test; test trên đồ thị thật tự skip nếu chưa có dữ liệu
+# 03 — dựng đồ thị 12 quận mức A từ GADM và B2
+#      tạo data/processed/A.graphml cùng các bảng A_*.csv
+python scripts/03_build_district_graph.py
+
+# 04 — chọn ca thử và đích ngẫu nhiên
+#      tạo results/tables/cases.csv và detour_<dataset>_<kho>.csv
+python scripts/04_select_cases.py --dataset all
+
+# 05 — chạy BFS, GBFS, A* và UCS
+#      tạo runs.csv, runs_A.csv, summary*.csv và trace
+python scripts/05_run_benchmark.py --dataset all
+
+# 06 — tạo biểu đồ PNG và bản đồ HTML
+python scripts/06_make_figures.py --only all
+
+# 07 — tùy chọn: chạy kịch bản nhiều điểm dừng M1
+python scripts/07_multi_stop.py --scenario M1
 ```
+
+`01_download.py` bỏ qua snapshot đã có. Dùng `--force` chỉ khi muốn tải lại
+OSM và tạo snapshot mới:
+
+```powershell
+python scripts/01_download.py --dataset all --force
+```
+
+Có thể chạy riêng một dataset bằng `--dataset B1` hoặc `--dataset B2` ở các
+bước 01, 02, 04 và 05. Bước 03 luôn cần cả dữ liệu cấu hình mức A và B2.
+
+### 5. Kiểm tra toàn bộ và mở kết quả
+
+```powershell
+python -m pytest -q
+```
+
+Test trên đồ thị thật sẽ tự bỏ qua nếu chưa có `data/processed/`. Kết quả
+chính nằm trong `results/tables/`, hình trong `results/figures/`, và bản đồ
+HTML tương tác trong `results/maps/`.
+
+### 6. Chạy demo web
+
+Chỉ chạy sau bước 02 (để có B1/B2 đã xử lý); nếu muốn xem các trace và bản đồ
+đã sinh thì chạy tiếp bước 04–06 trước:
+
+```powershell
+python app/server.py
+```
+
+Mở [http://127.0.0.1:5000](http://127.0.0.1:5000), chọn đồ thị, kho và đích
+(hoặc bấm lên bản đồ) để xem bốn thuật toán chạy song song. Dừng server bằng
+`Ctrl+C`.
+
+### 7. Mở các notebook (tùy chọn)
+
+Sau khi chạy pipeline, mở Jupyter:
+
+```powershell
+python -m jupyter notebook
+```
+
+Chạy theo thứ tự `notebooks/01_explore_data.ipynb` →
+`notebooks/02_hand_trace_level_A.ipynb` →
+`notebooks/03_results_discussion.ipynb`. Notebook 01 dùng dữ liệu đã xử lý;
+notebook 02 cần đồ thị A; notebook 03 cần các bảng kết quả từ bước 05.
 
 | Thư mục | Nội dung |
 |---|---|

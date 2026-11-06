@@ -2,9 +2,12 @@
 
 from datetime import datetime, timezone
 from pathlib import Path
+import re
+import time
 
 import networkx as nx
 import osmnx as ox
+from osmnx._errors import ResponseStatusCodeError
 
 from src.config import PATHS, load_config, update_run_metadata
 from src.data.study_area import compute_bbox
@@ -14,6 +17,38 @@ def configure_osmnx(cfg) -> None:
     ox.settings.use_cache = cfg["osmnx"]["use_cache"]
     ox.settings.cache_folder = str(PATHS.ROOT / "cache")
     ox.settings.log_console = False
+
+
+def _is_retryable_overpass_error(error: ResponseStatusCodeError) -> bool:
+    """Return whether Overpass reported a transient server response."""
+    match = re.search(r"responded:?\s*(\d{3})\b", str(error))
+    return bool(match and int(match.group(1)) in {500, 502, 503})
+
+
+def _download_graph(bbox, ds_cfg, osmnx_cfg):
+    """Download a graph with bounded retries for transient Overpass failures."""
+    retries = max(0, int(osmnx_cfg.get("overpass_retries", 3)))
+    backoff_seconds = max(0.0, float(osmnx_cfg.get("overpass_backoff_seconds", 10)))
+    attempts = retries + 1
+
+    for attempt in range(1, attempts + 1):
+        try:
+            return ox.graph_from_bbox(
+                bbox,
+                network_type=ds_cfg.get("network_type") or "all",
+                custom_filter=ds_cfg.get("custom_filter"),
+                simplify=osmnx_cfg["simplify"],
+                retain_all=osmnx_cfg["retain_all"],
+            )
+        except ResponseStatusCodeError as error:
+            if not _is_retryable_overpass_error(error) or attempt == attempts:
+                raise
+            delay = backoff_seconds * (2 ** (attempt - 1))
+            print(
+                f"Overpass tạm thời lỗi (lần {attempt}/{attempts}): "
+                f"thử lại sau {delay:g} giây"
+            )
+            time.sleep(delay)
 
 
 def build_filter(ds_cfg) -> str | None:
@@ -38,12 +73,10 @@ def download_dataset(name, cfg=None, force=False) -> Path:
     ds_cfg = cfg["datasets"][name]
     bbox = compute_bbox(cfg)
     custom_filter = build_filter(ds_cfg)
-    G = ox.graph_from_bbox(
+    G = _download_graph(
         bbox,
-        network_type=ds_cfg.get("network_type") or "all",
-        custom_filter=custom_filter,
-        simplify=cfg["osmnx"]["simplify"],
-        retain_all=cfg["osmnx"]["retain_all"],
+        {**ds_cfg, "custom_filter": custom_filter},
+        cfg["osmnx"],
     )
     PATHS.DATA_RAW.mkdir(parents=True, exist_ok=True)
     ox.save_graphml(G, out_path)

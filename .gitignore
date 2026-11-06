@@ -11,3 +11,7 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 .DS_Store
+.agents/
+.claude
+skills-lock.json
+REPO_ANALYSIS.md
